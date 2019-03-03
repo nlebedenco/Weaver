@@ -17,10 +17,10 @@ namespace Weaver
 
             public StopwatchDefinition(TypeDefinition stopwatchTypeDef, ModuleDefinition module)
             {
-                consturctor = module.Import(stopwatchTypeDef.GetMethod(".ctor"));
-                start = module.Import(stopwatchTypeDef.GetMethod("Start"));
-                stop = module.Import(stopwatchTypeDef.GetMethod("Stop"));
-                getElapsedMilliseconds = module.Import(stopwatchTypeDef.GetProperty("ElapsedMilliseconds").GetMethod);
+                consturctor = module.ImportReference(stopwatchTypeDef.GetMethod(".ctor"));
+                start = module.ImportReference(stopwatchTypeDef.GetMethod("Start"));
+                stop = module.ImportReference(stopwatchTypeDef.GetMethod("Stop"));
+                getElapsedMilliseconds = module.ImportReference(stopwatchTypeDef.GetProperty("ElapsedMilliseconds").GetMethod);
             }
         }
 
@@ -49,18 +49,18 @@ namespace Weaver
         public override void VisitModule(ModuleDefinition moduleDefinition)
         {
             // Import our stopwatch type reference 
-            m_StopwatchTypeReference = moduleDefinition.Import(typeof(Stopwatch));
+            m_StopwatchTypeReference = moduleDefinition.ImportReference(typeof(Stopwatch));
             // Resolve it so we can get the type definition
             TypeDefinition stopwatchTypeDef = m_StopwatchTypeReference.Resolve();
             // Create our value holder
             m_StopWatchTypeDef = new StopwatchDefinition(stopwatchTypeDef, moduleDefinition);
             // String
             TypeDefinition stringTypeDef = typeSystem.String.Resolve();
-            m_StringConcatMethodRef = moduleDefinition.Import(stringTypeDef.GetMethod("Concat", 2));
+            m_StringConcatMethodRef = moduleDefinition.ImportReference(stringTypeDef.GetMethod("Concat", 2));
 
-            TypeReference debugTypeRef = moduleDefinition.Import(typeof(Debug));
+            TypeReference debugTypeRef = moduleDefinition.ImportReference(typeof(Debug));
             TypeDefinition debugTypeDeff = debugTypeRef.Resolve();
-            m_DebugLogMethodRef = moduleDefinition.Import(debugTypeDeff.GetMethod("Log", 1));
+            m_DebugLogMethodRef = moduleDefinition.ImportReference(debugTypeDeff.GetMethod("Log", 1));
         }
 
         public override void VisitMethod(MethodDefinition methodDefinition)

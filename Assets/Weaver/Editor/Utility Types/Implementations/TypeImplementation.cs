@@ -1,4 +1,4 @@
-﻿using Mono.Cecil;
+using Mono.Cecil;
 using System;
 using Weaver.Extensions;
 
@@ -13,7 +13,7 @@ namespace Weaver
         public TypeImplementation(ModuleDefinition module, Type type)
         {
             m_Module = module;
-            reference = m_Module.Import(type);
+            reference = m_Module.ImportReference(type);
             definition = reference.Resolve();
         }
 
