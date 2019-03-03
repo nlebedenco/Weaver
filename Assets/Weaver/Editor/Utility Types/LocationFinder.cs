@@ -1,4 +1,4 @@
-﻿using Mono.Cecil;
+using Mono.Cecil;
 using Mono.Cecil.Cil;
 
 namespace Weaver
@@ -36,12 +36,14 @@ namespace Weaver
                     for (int instructionIndex = 0; instructionIndex < body.Instructions.Count; instructionIndex++)
                     {
                         Instruction instruction = body.Instructions[instructionIndex];
+						MethodDefinition method = body.Method;
+						SequencePoint sequencePoint = method.DebugInformation.GetSequencePoint(instruction);
 
-                        if (instruction.SequencePoint != null)
+						if (sequencePoint != null)
                         {
                             return new MemberLocation
                             {
-                                Url = instruction.SequencePoint.Document.Url
+                                Url = sequencePoint.Document.Url
                             };
                         }
                     }
@@ -55,12 +57,13 @@ namespace Weaver
         {
             foreach (var instruction in method.Body.Instructions)
             {
-                if (instruction.SequencePoint != null)
+				SequencePoint sequencePoint = method.DebugInformation.GetSequencePoint(instruction);
+                if (sequencePoint != null)
                 {
                     return new MethodLocation
                     {
-                        Url = instruction.SequencePoint.Document.Url,
-                        Line = instruction.SequencePoint.StartLine
+                        Url = sequencePoint.Document.Url,
+                        Line = sequencePoint.StartLine
                     };
                 }
             }

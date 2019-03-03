@@ -1,4 +1,4 @@
-﻿using Mono.Cecil;
+using Mono.Cecil;
 using Mono.Cecil.Cil;
 using System.Diagnostics;
 using Weaver.Extensions;
@@ -79,8 +79,8 @@ namespace Weaver
             MethodBody body = methodDefinition.Body;
             ILProcessor bodyProcessor = body.GetILProcessor();
 
-            VariableDefinition stopwatchVariable = new VariableDefinition("stopwatch", m_StopwatchTypeReference);
-            VariableDefinition elapsedMilliseconds = new VariableDefinition("elapsedMilliseconds", typeSystem.Int64);
+            VariableDefinition stopwatchVariable = new VariableDefinition(m_StopwatchTypeReference);
+            VariableDefinition elapsedMilliseconds = new VariableDefinition(typeSystem.Int64);
             body.Variables.Add(stopwatchVariable);
             body.Variables.Add(elapsedMilliseconds);
             // Inject at the start of the function 

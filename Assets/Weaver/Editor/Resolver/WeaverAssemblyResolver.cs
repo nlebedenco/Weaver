@@ -1,6 +1,7 @@
-﻿using Mono.Cecil;
+using Mono.Cecil;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 
 namespace Weaver
@@ -24,28 +25,28 @@ namespace Weaver
             // Get the current app domain
             AppDomain domain = AppDomain.CurrentDomain;
             // Find all assemblies
-            Assembly[] assemblies = domain.GetAssemblies();
+            IEnumerable<Assembly> assemblies = domain.GetAssemblies().Where(p => !p.IsDynamic);
             // for each currently loaded assembly,
-            for (int i = 0; i < assemblies.Length; i++)
-            {
-                // store locations
-                _appDomainAssemblyLocations[assemblies[i].FullName] = assemblies[i].Location;
-                // add all directories as search paths
-                AddSearchDirectory(System.IO.Path.GetDirectoryName(assemblies[i].Location));
-            }
+			foreach (var assembly in assemblies)
+			{
+				// store locations
+				_appDomainAssemblyLocations[assembly.FullName] = assembly.Location;
+				// add all directories as search paths
+				AddSearchDirectory(System.IO.Path.GetDirectoryName(assembly.Location));
+			}
         }
 
-        public override AssemblyDefinition Resolve(string fullName)
+        protected override void Dispose(bool disposing)
         {
-            AssemblyDefinition assemblyDef = FindAssemblyDefinition(fullName, null);
+	        if (disposing)
+	        {
+		        foreach (var assemblyDefinition in _cache.Values)
+		        {
+			        assemblyDefinition.Dispose();
+		        }
+	        }
 
-            if (assemblyDef == null)
-            {
-                assemblyDef = base.Resolve(fullName);
-                _cache[fullName] = assemblyDef;
-            }
-
-            return assemblyDef;
+	        base.Dispose(disposing);
         }
 
         public override AssemblyDefinition Resolve(AssemblyNameReference name)
@@ -56,19 +57,6 @@ namespace Weaver
             {
                 assemblyDef = base.Resolve(name);
                 _cache[name.FullName] = assemblyDef;
-            }
-
-            return assemblyDef;
-        }
-
-        public override AssemblyDefinition Resolve(string fullName, ReaderParameters parameters)
-        {
-            AssemblyDefinition assemblyDef = FindAssemblyDefinition(fullName, parameters);
-
-            if (assemblyDef == null)
-            {
-                assemblyDef = base.Resolve(fullName, parameters);
-                _cache[fullName] = assemblyDef;
             }
 
             return assemblyDef;
@@ -95,7 +83,7 @@ namespace Weaver
         {
             if (fullName == null)
             {
-                throw new ArgumentNullException("fullName");
+                throw new ArgumentNullException(nameof(fullName));
             }
 
             AssemblyDefinition assemblyDefinition;

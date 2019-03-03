@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEditor;
 using System.Collections.Generic;
 using Mono.Cecil;
@@ -38,19 +38,6 @@ namespace Weaver
 
         [SerializeField]
         private Stopwatch m_Timer;
-
-        // Resolver
-        private WeaverAssemblyResolver m_Resolver;
-
-        public WeaverAssemblyResolver resolver
-        {
-            get { return m_Resolver; }
-        }
-
-        public ComponentController componentController
-        {
-            get { return m_Components; }
-        }
 
         Object ILogable.context
         {
@@ -215,63 +202,66 @@ namespace Weaver
         /// </summary>
         private void WeaveAssemblies(IList<WeavedAssembly> assemblies)
         {
-            try
-            {
+	        m_Log.Info("Weaver Settings", "Populating Assembly Cache", false);
+	        AssemblyUtility.PopulateAssemblyCache();
+	        using (var resolver = new WeaverAssemblyResolver())
+	        {
+		        // Create a new reader
+		        m_Log.Info("Weaver Settings", "Creating Reader Parameters", false);
+		        ReaderParameters readerParameters = new ReaderParameters
+		        {
+			        AssemblyResolver = resolver,
+			        // Tell the reader to look at symbols so we can get line numbers for errors, warnings, and logs.
+			        ReadSymbols = true,
+			        ReadWrite = true
+		        };
 
-                m_Log.Info("Weaver Settings", "Populating Assembly Cache", false);
-                AssemblyUtility.PopulateAssemblyCache();
-                // Create new resolver
-                m_Resolver = new WeaverAssemblyResolver();
-                // Create a new reader
-                m_Log.Info("Weaver Settings", "Creating Reader Parameters", false);
-                ReaderParameters readerParameters = new ReaderParameters();
-                // Pass the reader our resolver 
-                readerParameters.AssemblyResolver = m_Resolver;
-                // Tell the reader to look at symbols so we can get line numbers for errors, warnings, and logs.
-                readerParameters.ReadSymbols = true;
-                // Create our writer
-                WriterParameters writerParameters = new WriterParameters();
-                // We do want to write our symbols
-                writerParameters.WriteSymbols = true;
-                // Create a list of definitions
-                Collection<ModuleDefinition> editingModules = new Collection<ModuleDefinition>();
-                for (int i = 0; i < assemblies.Count; i++)
-                {
-                    // We have a changed assembly so we need to get the definition to modify. 
-                    m_Log.Info("Weaver Settings", "Creating ModuleDefinition for <i>" + assemblies[i].relativePath + "</i>.", false);
-                    ModuleDefinition moduleDefinition = ModuleDefinition.ReadModule(assemblies[i].GetSystemPath(), readerParameters);
-                    // Add it to our list
-                    editingModules.Add(moduleDefinition);
-                }
-                m_Log.Info("Weaver Settings", "Initializing Components.", false);
-                // Initialize our component manager
-                m_Components.Initialize(this);
-                // Visit Modules
-                m_Log.Info("Weaver Settings", "Visiting Modules.", false);
-                m_Components.VisitModules(editingModules, m_Log);
-                // Save
-                for (int i = 0; i < assemblies.Count; i++)
-                {
-                    m_Log.Info("Weaver Settings", "Writing Module <i>" + assemblies[i].relativePath + "</i> to disk.", false);
-                    editingModules[i].Write(assemblies[i].GetSystemPath(), writerParameters);
-                    // remember write time of modified assembly
-                    assemblies[i].HasChanges();
-                }
-                assemblies.Clear();
-                m_Log.Info("Weaver Settings", "Weaving Successfully Completed", false);
+		        // Create a list of definitions
+		        var editingModules = new Collection<ModuleDefinition>();
+		        for (int i = 0; i < assemblies.Count; i++)
+		        {
+			        // We have a changed assembly so we need to get the definition to modify. 
+			        m_Log.Info("Weaver Settings",
+				        "Creating ModuleDefinition for <i>" + assemblies[i].relativePath + "</i>.", false);
+			        ModuleDefinition moduleDefinition =
+				        ModuleDefinition.ReadModule(assemblies[i].GetSystemPath(), readerParameters);
+			        // Add it to our list
+			        editingModules.Add(moduleDefinition);
+		        }
 
-                // Stats
-                m_Log.Info("Statistics", "Weaving Time ms: " + m_Timer.ElapsedMilliseconds, false);
-                m_Log.Info("Statistics", "Modules Visited: " + m_Components.totalModulesVisited, false);
-                m_Log.Info("Statistics", "Types Visited: " + m_Components.totalTypesVisited, false);
-                m_Log.Info("Statistics", "Methods Visited: " + m_Components.totalMethodsVisited, false);
-                m_Log.Info("Statistics", "Fields Visited: " + m_Components.totalFieldsVisited, false);
-                m_Log.Info("Statistics", "Properties Visited: " + m_Components.totalPropertiesVisited, false);
-            }
-            catch (Exception e)
-            {
-                throw e;
-            }
+		        m_Log.Info("Weaver Settings", "Initializing Components.", false);
+		        // Initialize our component manager
+		        m_Components.Initialize(this);
+
+		        // Visit Modules
+		        m_Log.Info("Weaver Settings", "Visiting Modules.", false);
+		        m_Components.VisitModules(editingModules, m_Log);
+
+		        // Save
+		        for (int i = 0; i < assemblies.Count; i++)
+		        {
+					var moduleDefinition = editingModules[i];
+					var weavedAssembly = assemblies[i];
+
+					m_Log.Info("Weaver Settings", $"Writing Module <i>{weavedAssembly.relativePath}</i> to disk.", false);
+
+			        moduleDefinition.Write();
+			        moduleDefinition.Dispose();
+
+			        weavedAssembly.HasChanges(); // remember write time of modified assembly
+		        }
+
+		        assemblies.Clear();
+		        m_Log.Info("Weaver Settings", "Weaving Successfully Completed", false);
+	        }
+
+	        // Stats
+	        m_Log.Info("Statistics", "Weaving Time ms: " + m_Timer.ElapsedMilliseconds, false);
+	        m_Log.Info("Statistics", "Modules Visited: " + m_Components.totalModulesVisited, false);
+	        m_Log.Info("Statistics", "Types Visited: " + m_Components.totalTypesVisited, false);
+	        m_Log.Info("Statistics", "Methods Visited: " + m_Components.totalMethodsVisited, false);
+	        m_Log.Info("Statistics", "Fields Visited: " + m_Components.totalFieldsVisited, false);
+	        m_Log.Info("Statistics", "Properties Visited: " + m_Components.totalPropertiesVisited, false);
         }
 
         [UsedImplicitly]
