@@ -1,5 +1,5 @@
 {
-  "name": "com.github.nlebedenco.weaver",
+  "name": "com.github.drunken-lemurs.weaver",
   "displayName": "Weaver",
   "description": "Assembly IL post-processing framework",
   "version": "0.9.0-preview",
@@ -11,7 +11,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/nlebedenco/Weaver.git"
+    "url": "git+https://github.com/drunken-lemurs/Weaver.git"
   },
   "src": "Assets/Weaver",
   "author": "Byron Mayne (https://github.com/ByronMayne)",
