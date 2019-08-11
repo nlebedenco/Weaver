@@ -2,12 +2,16 @@ using UnityEngine;
 using UnityEditor;
 using System.Collections.Generic;
 using Mono.Cecil;
+using Mono.Cecil.Cil;
+using Mono.Cecil.Mdb;
+using Mono.Cecil.Pdb;
 using Mono.Collections.Generic;
 using UnityEditor.Callbacks;
 using UnityEngine.SceneManagement;
 using Object = UnityEngine.Object;
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Text;
 using JetBrains.Annotations;
 
@@ -196,72 +200,99 @@ namespace Weaver
             }
         }
 
+        private static ISymbolReaderProvider GetSymbolReaderProvider(string inputFile)
+        {
+            string nakedFileName = inputFile.Substring(0, inputFile.Length - 4);
+            if (File.Exists(nakedFileName + ".pdb"))
+                return new PdbReaderProvider();
+
+            if (File.Exists(nakedFileName + ".dll.mdb"))
+                return new MdbReaderProvider();
+
+            return null;
+        }
+
+        private static WriterParameters GetWriterParameters(ISymbolReaderProvider symbolProvider)
+        {
+            WriterParameters writeParams = new WriterParameters();
+
+            if (symbolProvider is PdbReaderProvider)
+                writeParams.SymbolWriterProvider = new PdbWriterProvider();
+            else if (symbolProvider is MdbReaderProvider)
+                writeParams.SymbolWriterProvider = new MdbWriterProvider();
+
+            return writeParams;
+        }
+
         /// <summary>
         /// Takes in a collection of assemblies and starts the weaving process for
         /// all of them. 
         /// </summary>
         private void WeaveAssemblies(IList<WeavedAssembly> assemblies)
         {
-	        m_Log.Info("Weaver Settings", "Populating Assembly Cache", false);
-	        AssemblyUtility.PopulateAssemblyCache();
-	        using (var resolver = new WeaverAssemblyResolver())
-	        {
-		        // Create a new reader
-		        m_Log.Info("Weaver Settings", "Creating Reader Parameters", false);
-		        ReaderParameters readerParameters = new ReaderParameters
-		        {
-			        AssemblyResolver = resolver,
-			        // Tell the reader to look at symbols so we can get line numbers for errors, warnings, and logs.
-			        ReadSymbols = true,
-			        ReadWrite = true
-		        };
+            m_Log.Info("Weaver Settings", "Populating Assembly Cache", false);
+            AssemblyUtility.PopulateAssemblyCache();
+            using (var resolver = new WeaverAssemblyResolver())
+            {
+                // Create a new reader
+                m_Log.Info("Weaver Settings", "Creating Reader Parameters", false);
+                ReaderParameters readerParameters = new ReaderParameters
+                {
+                    AssemblyResolver = resolver,
+                    // Tell the reader to look at symbols so we can get line numbers for errors, warnings, and logs.
+                    ReadSymbols = true,
+                    ReadWrite = true
+                };
 
-		        // Create a list of definitions
-		        var editingModules = new Collection<ModuleDefinition>();
-		        for (int i = 0; i < assemblies.Count; i++)
-		        {
-			        // We have a changed assembly so we need to get the definition to modify. 
-			        m_Log.Info("Weaver Settings",
-				        "Creating ModuleDefinition for <i>" + assemblies[i].relativePath + "</i>.", false);
-			        ModuleDefinition moduleDefinition =
-				        ModuleDefinition.ReadModule(assemblies[i].GetSystemPath(), readerParameters);
-			        // Add it to our list
-			        editingModules.Add(moduleDefinition);
-		        }
+                // Create a list of definitions
+                var editingModules = new Collection<ModuleDefinition>();
+                var symbolProviders = new ISymbolReaderProvider[assemblies.Count];
 
-		        m_Log.Info("Weaver Settings", "Initializing Components.", false);
-		        // Initialize our component manager
-		        m_Components.Initialize(this);
+                for (int i = 0; i < assemblies.Count; i++)
+                {
+                    // We have a changed assembly so we need to get the definition to modify. 
+                    m_Log.Info("Weaver Settings",
+                        "Creating ModuleDefinition for <i>" + assemblies[i].relativePath + "</i>.", false);
+                    var assemblyPath = assemblies[i].GetSystemPath();
+                    symbolProviders[i] = readerParameters.SymbolReaderProvider = GetSymbolReaderProvider(assemblyPath);
+                    ModuleDefinition moduleDefinition = ModuleDefinition.ReadModule(assemblyPath, readerParameters);
+                    // Add it to our list
+                    editingModules.Add(moduleDefinition);
+                }
 
-		        // Visit Modules
-		        m_Log.Info("Weaver Settings", "Visiting Modules.", false);
-		        m_Components.VisitModules(editingModules, m_Log);
+                m_Log.Info("Weaver Settings", "Initializing Components.", false);
+                // Initialize our component manager
+                m_Components.Initialize(this);
 
-		        // Save
-		        for (int i = 0; i < assemblies.Count; i++)
-		        {
-					var moduleDefinition = editingModules[i];
-					var weavedAssembly = assemblies[i];
+                // Visit Modules
+                m_Log.Info("Weaver Settings", "Visiting Modules.", false);
+                m_Components.VisitModules(editingModules, m_Log);
 
-					m_Log.Info("Weaver Settings", $"Writing Module <i>{weavedAssembly.relativePath}</i> to disk.", false);
+                // Save
+                for (int i = 0; i < assemblies.Count; i++)
+                {
+                    var moduleDefinition = editingModules[i];
+                    var weavedAssembly = assemblies[i];
 
-			        moduleDefinition.Write();
-			        moduleDefinition.Dispose();
+                    m_Log.Info("Weaver Settings", $"Writing Module <i>{weavedAssembly.relativePath}</i> to disk.", false);
 
-			        weavedAssembly.HasChanges(); // remember write time of modified assembly
-		        }
+                    moduleDefinition.Write(GetWriterParameters(symbolProviders[i]));
+                    moduleDefinition.Dispose();
 
-		        assemblies.Clear();
-		        m_Log.Info("Weaver Settings", "Weaving Successfully Completed", false);
-	        }
+                    weavedAssembly.HasChanges(); // remember write time of modified assembly
+                }
 
-	        // Stats
-	        m_Log.Info("Statistics", "Weaving Time ms: " + m_Timer.ElapsedMilliseconds, false);
-	        m_Log.Info("Statistics", "Modules Visited: " + m_Components.totalModulesVisited, false);
-	        m_Log.Info("Statistics", "Types Visited: " + m_Components.totalTypesVisited, false);
-	        m_Log.Info("Statistics", "Methods Visited: " + m_Components.totalMethodsVisited, false);
-	        m_Log.Info("Statistics", "Fields Visited: " + m_Components.totalFieldsVisited, false);
-	        m_Log.Info("Statistics", "Properties Visited: " + m_Components.totalPropertiesVisited, false);
+                assemblies.Clear();
+                m_Log.Info("Weaver Settings", "Weaving Successfully Completed", false);
+            }
+
+            // Stats
+            m_Log.Info("Statistics", "Weaving Time ms: " + m_Timer.ElapsedMilliseconds, false);
+            m_Log.Info("Statistics", "Modules Visited: " + m_Components.totalModulesVisited, false);
+            m_Log.Info("Statistics", "Types Visited: " + m_Components.totalTypesVisited, false);
+            m_Log.Info("Statistics", "Methods Visited: " + m_Components.totalMethodsVisited, false);
+            m_Log.Info("Statistics", "Fields Visited: " + m_Components.totalFieldsVisited, false);
+            m_Log.Info("Statistics", "Properties Visited: " + m_Components.totalPropertiesVisited, false);
         }
 
         [UsedImplicitly]
